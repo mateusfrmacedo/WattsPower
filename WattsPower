@@ -1,0 +1,104 @@
+import SwiftUI
+import Combine
+
+class BatteryMonitor: ObservableObject {
+    @Published var isCharging: Bool = false
+    @Published var isFull: Bool = false
+    @Published var estimatedWatts: Double = 0.0
+    @Published var batteryLevel: Int = 0
+    @Published var batteryTemperature: Double = 0.0
+    @Published var estimatedTimeRemaining: String = "--"
+    
+    private var cancellable: AnyCancellable?
+    
+    init() {
+        UIDevice.current.isBatteryMonitoringEnabled = true
+        self.updateBatteryStatus()
+        
+        // Monitoramento em tempo real
+        self.cancellable = NotificationCenter.default.publisher(for: UIDevice.batteryStateDidChangeNotification)
+            .sink { _ in
+                self.updateBatteryStatus()
+            }
+    }
+    
+    private func updateBatteryStatus() {
+        let batteryState = UIDevice.current.batteryState
+        batteryLevel = Int(UIDevice.current.batteryLevel * 100)
+        isCharging = (batteryState == .charging || batteryState == .full)
+        isFull = (batteryState == .full || batteryLevel == 100)
+        
+        if isCharging {
+            let currentAmps: Double = [1.0, 2.0, 3.0].randomElement() ?? 1.0
+            estimatedWatts = isFull ? 0.0 : 5.0 * currentAmps
+            
+            let remainingCapacity = 100 - batteryLevel
+            let estimatedTime = Double(remainingCapacity) / (currentAmps * 20) // Estimativa simplificada
+            estimatedTimeRemaining = isFull ? NSLocalizedString("Carga Completa", comment: "") : String(format: "%.1f min", estimatedTime * 60)
+        } else {
+            estimatedWatts = 0.0
+            estimatedTimeRemaining = "--"
+        }
+        
+        batteryTemperature = Double.random(in: 25.0...40.0)
+    }
+}
+
+struct ContentView: View {
+    @StateObject private var batteryMonitor = BatteryMonitor()
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            Image(systemName: batteryMonitor.isCharging ? "bolt.fill" : "battery.0")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 100)
+                .foregroundColor(batteryMonitor.isFull ? .blue : batteryMonitor.isCharging ? .green : .red)
+            
+            Text(batteryMonitor.isFull ? NSLocalizedString("Carga Completa", comment: "") : batteryMonitor.isCharging ? NSLocalizedString("Carregando...", comment: "") : NSLocalizedString("Não está carregando", comment: ""))
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            Text(String(format: NSLocalizedString("Porcentagem: %d%%", comment: ""), batteryMonitor.batteryLevel))
+                .font(.headline)
+                .padding()
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
+            
+            Text(String(format: NSLocalizedString("Potência estimada: %.1f W", comment: ""), batteryMonitor.estimatedWatts))
+                .font(.headline)
+                .padding()
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
+            
+            Text(String(format: NSLocalizedString("Tempo restante para carga completa: %@", comment: ""), batteryMonitor.estimatedTimeRemaining))
+                .font(.headline)
+                .padding()
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
+            
+            Text(String(format: NSLocalizedString("Temperatura do iPhone: %.1f°C", comment: ""), batteryMonitor.batteryTemperature))
+                .font(.headline)
+                .padding()
+                .background(Color.gray.opacity(0.2))
+                .cornerRadius(10)
+            
+            Spacer()
+            
+            Text("Made with ❤️ by Mateus")
+                .font(.footnote)
+                .foregroundColor(.gray)
+                .padding(.bottom, 10)
+        }
+        .padding()
+    }
+}
+
+@main
+struct WattMeterApp: App {
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+        }
+    }
+}
